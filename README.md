@@ -30,7 +30,11 @@ pip install weasyprint PyMuPDF Pillow
 ### 語法
 
 ```bash
-python generate_accessible_pdf.py <背景圖片或PDF> <JSON檔案> -o <輸出的PDF檔案>
+# 多頁 PDF
+python generate_accessible_pdf.py document.pdf structure.json -o output.pdf
+
+# 多張連續圖片 (透過模式比對或資料夾掃描)
+python generate_accessible_pdf.py "examples/page-*.jpg" structure.json -o output.pdf
 ```
 
 ### 操作範例
@@ -50,47 +54,65 @@ python generate_accessible_pdf.py examples/background.jpg examples/structure.jso
 您可以複製並使用以下 Prompt 行為腳本，讓主流視覺 AI 語言模型幫您一次性產出符合本專案能解析定位的純 JSON 結構陣列：
 
 ```
-請扮演專業的「文件無障礙與結構分析師」。我將提供一張文件圖片，假設該圖片的寬度為 1000px，高度為 1414px（標準 A4 比例）。請辨識內容，並輸出包含絕對座標的純 JSON 陣列。
+請扮演專業的「文件無障礙與結構分析師」。我將提供一系列文件圖片給您進行多頁辨識。假設每張圖片的寬度為 1000px，高度為 1414px（標準 A4 比例）。請辨識內容，並將結果輸出成一個包含絕對座標的「多頁 JSON 字典結構」，並將此結構放在單一的 Markdown 程式碼區塊內 (```json ... ```)。請注意這可能是一系列的對話，未來可能會有其他圖片提供。
 
 【處理規則】
 - 排除干擾：忽略頁首、頁尾、浮水印等裝飾性元素。
 - 判斷語意：為每一段文字標註合適的 type（如：H1, H2, H3, P, Table）。
 - 閱讀順序：嚴格依照人類由左至右、由上至下的自然閱讀順序來排序陣列。
 - 座標定位：請針對每一個元素估算在 1000x1414 畫布上的精準位置，包含對應欄位 top, left, width, height。數值請直接寫整數的 px 值。
-- 表格重建：當發現多個視覺文字框構成一個表格時，將它打包成巢狀 "Table" 結構，該節點必須包含 "rows" 陣列代表每一列(TR)；每一列含 "cells" 陣列代表儲存格(TH或TD)。並保留各個儲存格原本的座標與數值。
-- 輸出：不要包含 Markdown 標記或文字解釋。
+- 表格重建：當發現多個視覺文字框(有框線)構成一個表格時，將它打包成巢狀 "Table" 結構，該節點必須包含 "rows" 陣列代表每一列(TR)；每一列含 "cells" 陣列代表儲存格(TH或TD)。並保留各個儲存格原本的座標與數值。
+- 空白頁處理：若有一頁完全沒有需要標記的文字，則傳回空白陣列。
+- 輸出：不要包含除了 JSON 程式碼區塊之外的 Markdown 標記或文字解釋。
 
-【預期 JSON 格式範例】
-[
-  { 
-    "type": "H2", 
-    "text": "第三季營收報表", 
-    "top": 100, "left": 50, "width": 200, "height": 30 
-  },
-  {
-    "type": "Table",
-    "top": 150, "left": 50, "width": 400, "height": 100,
-    "rows": [
-      {
-        "type": "TR",
-        "cells": [
-          { "type": "TH", "text": "月份", "top": 150, "left": 50, "width": 200, "height": 50 },
-          { "type": "TH", "text": "營收 (萬元)", "top": 150, "left": 250, "width": 200, "height": 50 }
-        ]
-      },
-      {
-        "type": "TR",
-        "cells": [
-          { "type": "TD", "text": "七月", "top": 200, "left": 50, "width": 200, "height": 50 },
-          { "type": "TD", "text": "1,250", "top": 200, "left": 250, "width": 200, "height": 50 }
-        ]
-      }
-    ]
-  },
-  { 
-    "type": "P", 
-    "text": "上表顯示七月份營收達標。", 
-    "top": 280, "left": 50, "width": 300, "height": 30 
-  }
-]
+【預期多頁 JSON 結構格式範例】
+```json
+{
+  "1": [
+    { 
+      "type": "H2", 
+      "text": "第三季營收報表", 
+      "top": 100, "left": 50, "width": 200, "height": 30 
+    },
+    {
+      "type": "Table",
+      "top": 150, "left": 50, "width": 400, "height": 100,
+      "rows": [
+        {
+          "type": "TR",
+          "cells": [
+            { "type": "TH", "text": "月份", "top": 150, "left": 50, "width": 200, "height": 50 },
+            { "type": "TH", "text": "營收 (萬元)", "top": 150, "left": 250, "width": 200, "height": 50 }
+          ]
+        },
+        {
+          "type": "TR",
+          "cells": [
+            { "type": "TD", "text": "七月", "top": 200, "left": 50, "width": 200, "height": 50 },
+            { "type": "TD", "text": "1,250", "top": 200, "left": 250, "width": 200, "height": 50 }
+          ]
+        }
+      ]
+    },
+    { 
+      "type": "P", 
+      "text": "上表顯示七月份營收達標。", 
+      "top": 280, "left": 50, "width": 300, "height": 30 
+    }
+  ],
+  "2": [
+    { 
+      "type": "H2", 
+      "text": "第四季預估報表", 
+      "top": 100, "left": 50, "width": 200, "height": 30 
+    },
+    { 
+      "type": "P", 
+      "text": "預計第四季營收成長 15%。", 
+      "top": 150, "left": 50, "width": 300, "height": 30 
+    }
+  ],
+  "3": []
+}
+```
 ```
