@@ -1,1 +1,15 @@
 /ebedTxt
+/embedTxt
+/emBedTxt
+/PDFKitchen
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Output
+examples/output*.pdf
