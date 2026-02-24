@@ -12,4 +12,5 @@ dist/
 build/
 
 # Output
+examples/*.*
 examples/output*.pdf
