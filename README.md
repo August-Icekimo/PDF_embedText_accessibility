@@ -4,9 +4,9 @@
 
 ## 專案原理
 
-1. **OCR / AI 辨識 (前置準備)：** 透過 AI（如 Gemini 具備 Vision 功能的語言模型）取得文件影像上的所有文字，並辨識其位置（Bounding Box）與語意（Heading, Paragraph, Table 等），輸出為結構化的 JSON 檔案。
+1. **OCR / AI 辨識 (前置準備)：** 透過 AI（如 Gemini 等具備 Vision 功能的多模態語言模型）取得文件影像上的所有文字，並辨識其位置（Bounding Box）與語意（Heading, Paragraph, Table 等），輸出為結構化的 JSON 檔案。
 2. **HTML / CSS 渲染引擎：** 腳本 `generate_accessible_pdf.py` 會讀取 JSON 與背景圖片後，動態生成一個 HTML 格式的 DOM 結構。
-   - 使用 CSS `position: absolute` 把文字精準定位疊加。
+   - 使用 CSS `position: absolute` 把文字定位疊加。
    - 透過設定文字顏色的 CSS `color: transparent` 以及 `opacity: 0.01` 把實體字元隱藏，但在 DOM 結構中仍具體保留其存取性。
    - 透過 WeasyPrint 核心軟體引擎將 HTML 重新渲染成 PDF，並強制啟動 `pdf_variant='pdf/ua-1'` 產生滿足無障礙合規標準的標籤。
 
@@ -39,12 +39,18 @@ python generate_accessible_pdf.py "examples/page-*.jpg" structure.json -o output
 
 ### 操作範例
 
-專案提供了一個 `examples` 目錄作為展示使用，您可啟動虛擬環境後執行下方指令：
+專案以 `examples` 目錄作為展示使用，您可啟動虛擬環境後執行下方指令：
 
 ```bash
 conda activate emBedTxt
 python generate_accessible_pdf.py examples/background.jpg examples/structure.json -o examples/output.pdf
 ```
+或者是
+```bash
+conda activate emBedTxt
+python generate_accessible_pdf.py examples/溫室氣體查驗意見─安康廠區.pdf examples/溫室氣體查驗意見─安康廠區.json -o examples/溫室氣體查驗意見-安康廠區-NVDA.pdf
+```
+
 (您可以透過您慣用的 PDF 閱讀器開啟 `examples/output.pdf`。畫面上只會看到原本的背景底圖，但是文字因為變成透明，依然可以使用滑鼠框選複製，或者使用視障報讀軟體正常解析。)
 
 ---
@@ -54,14 +60,14 @@ python generate_accessible_pdf.py examples/background.jpg examples/structure.jso
 您可以複製並使用以下 Prompt 行為腳本，讓主流視覺 AI 語言模型幫您一次性產出符合本專案能解析定位的純 JSON 結構陣列：
 
 ```
-請扮演專業的「文件無障礙與結構分析師」。我將提供一系列文件圖片給您進行多頁辨識。假設每張圖片的寬度為 1000px，高度為 1414px（標準 A4 比例）。請辨識內容，並將結果輸出成一個包含絕對座標的「多頁 JSON 字典結構」，並將此結構放在單一的 Markdown 程式碼區塊內 (```json ... ```)。請注意這可能是一系列的對話，未來可能會有其他圖片提供。
+請扮演專業的「文件無障礙與結構分析師」。我將提供一系列文件圖片/PDF給您進行多頁辨識。假設每張圖片/頁面的寬度為 1000px，高度為 1414px（標準 A4 比例）。請辨識內容，並將結果輸出成一個包含絕對座標的「多頁 JSON 字典結構」，並將此結構放在單一的 Markdown 程式碼區塊內 (```json ... ```)。請注意這可能是一系列的對話，未來可能會有其他圖片/PDF需要辨識。
 
 【處理規則】
-- 排除干擾：忽略頁首、頁尾、浮水印等裝飾性元素。
+- 排除干擾：忽略頁首、頁尾、浮水印、頁碼與LOGO/CIS視覺設計等裝飾性元素。
 - 判斷語意：為每一段文字標註合適的 type（如：H1, H2, H3, P, Table）。
 - 閱讀順序：嚴格依照人類由左至右、由上至下的自然閱讀順序來排序陣列。
 - 座標定位：請針對每一個元素估算在 1000x1414 畫布上的精準位置，包含對應欄位 top, left, width, height。數值請直接寫整數的 px 值。
-- 表格重建：當發現多個視覺文字框(有框線)構成一個表格時，將它打包成巢狀 "Table" 結構，該節點必須包含 "rows" 陣列代表每一列(TR)；每一列含 "cells" 陣列代表儲存格(TH或TD)。並保留各個儲存格原本的座標與數值。
+- 表格重建：當發現多個視覺文字框(需有框線)構成一個表格時，將它打包成巢狀 "Table" 結構，該節點必須包含 "rows" 陣列代表每一列(TR)；每一列含 "cells" 陣列代表儲存格(TH或TD)。並保留各個儲存格原本的座標與數值。
 - 空白頁處理：若有一頁完全沒有需要標記的文字，則傳回空白陣列。
 - 輸出：不要包含除了 JSON 程式碼區塊之外的 Markdown 標記或文字解釋。
 
