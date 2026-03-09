@@ -138,6 +138,34 @@ class AccessiblePdfApp:
 
         self._configure_fonts()
         self._build_ui()
+        self._load_intro()
+
+    # ───── 啟動說明設定 ─────
+
+    def _load_intro(self):
+        """讀取 Intro.md 並顯示在執行日誌區作為操作指引"""
+        # 定位內嵌檔案（支援 PyInstaller 打包路徑）
+        if getattr(sys, 'frozen', False):
+            base_dir = sys._MEIPASS
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        intro_path = os.path.join(base_dir, 'Intro.md')
+
+        if os.path.exists(intro_path):
+            try:
+                with open(intro_path, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                
+                if content:
+                    self.log_text.configure(state="normal")
+                    self.log_text.insert("end", content + "\n\n" + "═" * 40 + "\n\n")
+                    self.log_text.see("end")
+                    self.log_text.configure(state="disabled")
+            except Exception as e:
+                self._log(f"[WARNING] 無法讀取說明檔 ({intro_path}): {e}")
+        else:
+            self._log(f"[WARNING] 找不到說明檔 ({intro_path})")
 
     # ───── 字型設定 ─────
 

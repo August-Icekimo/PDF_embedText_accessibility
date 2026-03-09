@@ -30,7 +30,7 @@ a = Analysis(
     ['gui_app.py'],
     pathex=[],
     binaries=[],
-    datas=tkdnd_datas + ttkb_datas + [('fonts', 'fonts')],
+    datas=tkdnd_datas + ttkb_datas + [('fonts', 'fonts'), ('Intro.md', '.')],
     hiddenimports=[
         'tkinterdnd2',
         'ttkbootstrap',
