@@ -1,0 +1,11 @@
+# Core dependencies
+weasyprint
+PyMuPDF
+Pillow
+
+# GUI enhancement (optional - app works without these)
+ttkbootstrap
+tkinterdnd2
+
+# Packaging
+pyinstaller

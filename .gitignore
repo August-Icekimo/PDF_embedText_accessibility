@@ -2,6 +2,7 @@
 /embedTxt
 /emBedTxt
 /PDFKitchen
+/venv_ebt
 
 # Python
 __pycache__/
@@ -10,6 +11,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.spec.bak
 
 # Output
 examples/*.*

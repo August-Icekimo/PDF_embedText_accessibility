@@ -164,23 +164,45 @@ def generate_multi_page_html(json_data, pages_info):
     
     return "\n".join(html_parts)
 
-def main():
-    parser = argparse.ArgumentParser(description="產生多頁 PDF/UA-1 隱形文字無障礙 PDF")
-    parser.add_argument("background", help="背景影像 (支援萬用字元如 '*.jpg') 或單一 PDF 檔案路徑")
-    parser.add_argument("json_file", help="單一/多頁結構化文字的 JSON 檔案路徑")
-    parser.add_argument("-o", "--output", default="output_accessible.pdf", help="輸出的 PDF 檔案路徑")
-    args = parser.parse_args()
+def generate_pdf(background, json_file, output="output_accessible.pdf", callback=None):
+    """
+    核心 PDF 產生函式，可被 CLI 或 GUI 呼叫。
 
-    # 處理輸入背景
-    is_pdf_bg = args.background.lower().endswith(".pdf")
+    Args:
+        background: 背景檔案路徑（PDF 或圖片），支援 glob 萬用字元。
+                     也可傳入 list[str] 表示多張圖片路徑。
+        json_file:  結構化文字 JSON 檔案路徑。
+        output:     輸出 PDF 檔案路徑。
+        callback:   進度回呼函式 callback(message: str)，預設為 print。
+
+    Returns:
+        str: 成功時回傳輸出檔案的絕對路徑。
+
+    Raises:
+        FileNotFoundError: 找不到輸入檔案。
+        ValueError: JSON 格式錯誤或不支援的結構。
+        RuntimeError: PDF 產生失敗。
+    """
+    if callback is None:
+        callback = print
+
+    # --- 處理輸入背景 ---
     pages_info = []
 
+    # 允許傳入 list（GUI 批次用）或 str（CLI 用）
+    if isinstance(background, list):
+        bg_files = background
+        is_pdf_bg = len(bg_files) == 1 and bg_files[0].lower().endswith(".pdf")
+    else:
+        bg_files = [background]
+        is_pdf_bg = background.lower().endswith(".pdf")
+
     if is_pdf_bg:
-        if not os.path.exists(args.background):
-            print(f"找不到 PDF 檔案: {args.background}")
-            sys.exit(1)
-        print(f"從 PDF 轉換背景圖片: {args.background}")
-        extracted_pages = extract_pages_as_jpeg(args.background)
+        pdf_path = bg_files[0]
+        if not os.path.exists(pdf_path):
+            raise FileNotFoundError(f"找不到 PDF 檔案: {pdf_path}")
+        callback(f"從 PDF 轉換背景圖片: {pdf_path}")
+        extracted_pages = extract_pages_as_jpeg(pdf_path)
         for img_bytes, w, h in extracted_pages:
             pages_info.append({
                 'source': img_bytes,
@@ -189,16 +211,18 @@ def main():
                 'height': h
             })
     else:
-        # 處理圖片序列 (Glob 或是單張)
-        image_files = sorted(glob.glob(args.background))
-        if not image_files: # 如果 glob 沒抓到，可能就是直接傳檔名
-            if os.path.exists(args.background):
-                image_files = [args.background]
+        # 處理圖片序列 (Glob 或是直接檔案列表)
+        image_files = []
+        for bg in bg_files:
+            expanded = sorted(glob.glob(bg))
+            if expanded:
+                image_files.extend(expanded)
+            elif os.path.exists(bg):
+                image_files.append(bg)
             else:
-                print(f"找不到或無法匹配圖片檔案: {args.background}")
-                sys.exit(1)
-                
-        print(f"找到 {len(image_files)} 張背景圖片")
+                raise FileNotFoundError(f"找不到或無法匹配圖片檔案: {bg}")
+
+        callback(f"找到 {len(image_files)} 張背景圖片")
         for img_path in image_files:
             try:
                 with Image.open(img_path) as img:
@@ -210,53 +234,64 @@ def main():
                     'height': img_height
                 })
             except Exception as e:
-                print(f"無法讀取圖片尺寸 {img_path}: {e}")
-                sys.exit(1)
+                raise ValueError(f"無法讀取圖片尺寸 {img_path}: {e}")
 
-    # 讀取 JSON 並自動升級格式
-    if not os.path.exists(args.json_file):
-        print(f"找不到 JSON 檔案: {args.json_file}")
-        sys.exit(1)
+    # --- 讀取 JSON 並自動升級格式 ---
+    if not os.path.exists(json_file):
+        raise FileNotFoundError(f"找不到 JSON 檔案: {json_file}")
 
-    with open(args.json_file, "r", encoding="utf-8") as f:
+    with open(json_file, "r", encoding="utf-8") as f:
         try:
             raw_json_data = json.load(f)
         except json.JSONDecodeError as e:
-            print(f"JSON 格式錯誤: {e}")
-            sys.exit(1)
+            raise ValueError(f"JSON 格式錯誤: {e}")
 
-    # 格式轉換：如果頂層是 list，表示是舊版單頁格式，自動將其包裝成 {"1": [...]}
     if isinstance(raw_json_data, list):
         json_data = {"1": raw_json_data}
-        print("偵測到單頁 JSON 陣列格式，自動升級為多頁格式 {'1': [...]}")
+        callback("偵測到單頁 JSON 陣列格式，自動升級為多頁格式 {'1': [...]}")
     elif isinstance(raw_json_data, dict):
         json_data = raw_json_data
     else:
-        print("不支援的 JSON 根部結構（需為陣列或字典）")
-        sys.exit(1)
+        raise ValueError("不支援的 JSON 根部結構（需為陣列或字典）")
 
-    print(f"共要產生 {len(pages_info)} 頁的 PDF 文件...")
+    # --- 產生 HTML 與 PDF ---
+    callback(f"共要產生 {len(pages_info)} 頁的 PDF 文件...")
     html_str = generate_multi_page_html(json_data, pages_info)
 
     # 儲存中間產物方便除錯 (可選)
-    debug_html_path = args.output + ".debug.html"
+    debug_html_path = output + ".debug.html"
     with open(debug_html_path, "w", encoding="utf-8") as f:
         f.write(html_str)
-    print(f"產生中間 HTML: {debug_html_path}")
+    callback(f"產生中間 HTML: {debug_html_path}")
 
-    print(f"使用 WeasyPrint 產生 PDF/UA-1 檔案中...")
+    callback("使用 WeasyPrint 產生 PDF/UA-1 檔案中...")
     try:
-        # 產生 Tagged PDF
-        HTML(string=html_str, base_url=os.path.dirname(os.path.abspath(args.json_file))).write_pdf(
-            args.output,
+        HTML(string=html_str, base_url=os.path.dirname(os.path.abspath(json_file))).write_pdf(
+            output,
             pdf_variant='pdf/ua-1',
             presentational_hints=True
         )
-        print(f"✅ 成功產出無障礙 PDF: {args.output}")
-            
     except Exception as e:
-        print(f"❌ 產生 PDF 失敗: {e}")
+        raise RuntimeError(f"產生 PDF 失敗: {e}")
+
+    abs_output = os.path.abspath(output)
+    callback(f"✅ 成功產出無障礙 PDF: {abs_output}")
+    return abs_output
+
+
+def main():
+    parser = argparse.ArgumentParser(description="產生多頁 PDF/UA-1 隱形文字無障礙 PDF")
+    parser.add_argument("background", help="背景影像 (支援萬用字元如 '*.jpg') 或單一 PDF 檔案路徑")
+    parser.add_argument("json_file", help="單一/多頁結構化文字的 JSON 檔案路徑")
+    parser.add_argument("-o", "--output", default="output_accessible.pdf", help="輸出的 PDF 檔案路徑")
+    args = parser.parse_args()
+
+    try:
+        generate_pdf(args.background, args.json_file, args.output)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        print(f"❌ {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
